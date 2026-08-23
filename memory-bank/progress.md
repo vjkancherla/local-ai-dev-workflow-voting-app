@@ -6,11 +6,11 @@ Updated: 2026-08-23
 none
 
 ## Remaining
-- Optional: commit the Makefile.
-- Live-cluster R1–R17 verification still pending (needs `deploy.sh` + `verify.sh`).
+None. Pipeline fully wrapped by `make`; live R1–R17 verification passed.
 
 ## Known issues
 None.
 
 ## Status
-nip.io → .localhost migration done. Makefile added to wrap build/deploy/verify/cleanup scripts.
+nip.io → .localhost migration done. Makefile + MAKEFILE-GUIDE.md + README §4.4 added, committed,
+pushed. `make verify` = 17 PASS, 0 FAIL on the live cluster.
