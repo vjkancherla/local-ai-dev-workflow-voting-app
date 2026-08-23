@@ -1,5 +1,6 @@
 # oh-my-agent runtime (local artifacts — do not commit)
 .antigravitycli/
+.omo/
 .agents/results/
 .agents/state/
 .agents/backup/
