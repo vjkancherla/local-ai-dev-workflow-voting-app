@@ -3,15 +3,15 @@ set -uo pipefail
 
 # Full R1–R17 verification for the voting app.
 #
-# Prerequisites: a running cluster (see scripts/deploy.sh) and /etc/hosts
-# entries `127.0.0.1 vote.127.0.0.1.nip.io result.127.0.0.1.nip.io`.
+# Prerequisites: a running cluster (see scripts/deploy.sh). The *.localhost
+# hostnames resolve to 127.0.0.1 natively (RFC 6761) — no /etc/hosts needed.
 #
 # Results are appended to .workflow/verify.md.
 
 RELEASE="${RELEASE:-voting-app}"
 KUSTOMIZE_DIR="${KUSTOMIZE_DIR:-./kustomize}"
-VOTE_URL="${VOTE_URL:-https://vote.127.0.0.1.nip.io:8082}"
-RESULT_URL="${RESULT_URL:-https://result.127.0.0.1.nip.io:8082}"
+VOTE_URL="${VOTE_URL:-https://vote.localhost:8082}"
+RESULT_URL="${RESULT_URL:-https://result.localhost:8082}"
 REGISTRY="${REGISTRY:-0}"
 OUT=".workflow/verify.md"
 
@@ -208,7 +208,7 @@ else
   fail "R12" "kustomize build or overlay override failed"
 fi
 
-# ---- R13: vote and result reachable via nginx ingress (HTTPS) ----
+# ---- R13: vote and result reachable via Traefik ingress (HTTPS) ----
 v13="$(curl -sk --compressed -o /dev/null -w '%{http_code}' "$VOTE_URL/")"
 r13="$(curl -sk --compressed -o /dev/null -w '%{http_code}' "$RESULT_URL/")"
 if [[ "$v13" == "200" && "$r13" == "200" ]]; then

@@ -39,7 +39,7 @@ vote (Flask) → redis (queue) → worker (Python) → postgres ← result (Flas
 
 **Design process:** Requirements → Design → Synthesis (5-member adversarial planning) → Implementation Research → Lessons Log. Two human-directed overrides:
 1. Helm → Kustomize
-2. Traefik → nginx ingress + SSL passthrough + nip.io (partial — ingress YAML not updated)
+2. Ingress resolution — `nip.io`+`/etc/hosts` → `.localhost` (no external DNS) on k3d's bundled Traefik
 
 ---
 
@@ -137,11 +137,11 @@ Named `voting-app-postgres`, referenced by all deployments via `secretKeyRef`.
 ### 3.3 Ingress
 
 - `ingressClassName: traefik` (✅ k3d ships with **bundled Traefik** — it handles this resource)
-- Rules: `vote.127.0.0.1.nip.io` → vote service, `result.127.0.0.1.nip.io` → result service
+- Rules: `vote.localhost` → vote service, `result.localhost` → result service
 - `pathType: ImplementationSpecific`
 - Annotations: `traefik.ingress.kubernetes.io/router.entrypoints: web,websecure`
-- Hosts resolved via nip.io (auto-resolves to 127.0.0.1)
-- **deploy.sh also installs nginx ingress controller via Helm, but it's not used** — Traefik handles all traffic. The nginx controller is redundant.
+- Hosts resolve natively via the `.localhost` TLD (RFC 6761) → 127.0.0.1; no /etc/hosts or external DNS
+- **Ingress controller** — k3d ships with bundled Traefik (`ingressClassName: traefik`), which handles all traffic. No separate nginx ingress controller is installed or needed (`deploy.sh` only runs `kubectl apply -k`).
 
 ### 3.4 InitContainers
 
@@ -159,7 +159,7 @@ Named `voting-app-postgres`, referenced by all deployments via `secretKeyRef`.
 | Area | Note |
 |------|------|
 | **POSTGRES_DB mismatch** | `postgres-secret.env` has `POSTGRES_DB=votingdb` but deployments set `PGDATABASE=voting`. Postgres creates DB as `votingdb` on first init, but apps connect to `voting`. **Worker initContainer connects to `voting` (default postgres DB) — DDL runs there. Result queries `voting`. The actual DB `votingdb` may be empty.** |
-| **Ingress class mismatch** | Annotations say `traefik.ingress.kubernetes.io/...` but `ingressClassName: traefik`. Deploy.sh installs nginx ingress via Helm. **The ingress may not match the ingress controller.** |
+| **Ingress controller** | Uses k3d's bundled Traefik (`ingressClassName: traefik`), which matches the `traefik.ingress.kubernetes.io/...` annotations. No separate nginx controller is installed. |
 | **Redis no AOF** | Design doc claims AOF persistence, but manifest has no AOF config. Votes survive worker restart (Redis stays up) but **NOT Redis pod restart.** |
 | **No initContainer resources** | InitContainers have no resource requests/limits |
 | **Hardcoded image tags** | Images are `vote:latest`, `worker:latest`, `result:latest` — no versioning, no digest pinning |
@@ -196,13 +196,10 @@ End-to-end deployment script.
 5. Waits for all workloads to become ready (`kubectl rollout status`)
 
 **Local access:**
+The `.localhost` hostnames resolve to `127.0.0.1` natively (RFC 6761) — no `/etc/hosts` entry needed:
 ```
-# Add to /etc/hosts:
-127.0.0.1 vote.127.0.0.1.nip.io result.127.0.0.1.nip.io
-
-# Then:
-https://vote.127.0.0.1.nip.io:8082/
-https://result.127.0.0.1.nip.io:8082/
+https://vote.localhost:8082/
+https://result.localhost:8082/
 ```
 
 ### 4.3 `scripts/verify.sh`
@@ -292,7 +289,7 @@ Concrete implementation research covering:
 
 Two recorded lessons:
 1. **2026-08-12:** Helm → Kustomize switch. Rule: confirm deployment tool with human before generating templates.
-2. **2026-08-22:** Traefik → nginx ingress + SSL passthrough + nip.io. Port 80/8080 conflicts on macOS. Rule: probe host port availability before selecting ingress ports.
+2. **2026-08-22:** Ingress resolution — `nip.io`+`/etc/hosts` → `.localhost` (no external DNS) on k3d's bundled Traefik. Resolved macOS port 80/8080 conflicts via host ports 8081/8082. Rule: probe host port availability before selecting ingress ports.
 
 ### 5.6 `.ai-docs/PLAN-001-checkpointed-validation.md` (~290 lines)
 
@@ -348,7 +345,7 @@ Two recorded lessons:
 | **No backup/restore** | No script to backup Postgres data or restore from PVC. | Missing |
 | **No CHANGELOG** | No record of changes between versions. | Missing |
 | **No CONTRIBUTING guide** | No guidance for contributors. | Missing |
-| **verify.sh doesn't verify /etc/hosts** | Assumes hosts are configured; doesn't check before running. | `verify.sh` |
+| **verify.sh doesn't verify `.localhost`** | Assumes `.localhost` resolves (it does natively on macOS/Linux); doesn't check before running. | `verify.sh` |
 | **Result meta refresh** | Basic auto-refresh, no polling/SSE/WebSocket. | `result/templates/result.html` |
 
 ---
@@ -374,7 +371,7 @@ Ignores: `__pycache__/`, `*.py[cod]`, `.venv/`, `*.log`, `helm/voting-app/charts
 | Area | Note |
 |------|------|
 | **verify.sh `set -uo pipefail`** | Uses `-u` (unset vars fail) but NOT `-e` (exit on error). Good — individual checks handle their own errors. |
-| **Hardcoded URLs in verify.sh** | `VOTE_URL`/`RESULT_URL` default to `https://vote.127.0.0.1.nip.io:8082` — works if /etc/hosts set up, but script doesn't verify this |
+| `vote.localhost`/`result.localhost` in verify.sh | `VOTE_URL`/`RESULT_URL` default to those hosts; they resolve natively (RFC 6761), so no /etc/hosts setup is required |
 | **No cleanup script** | No `scripts/cleanup.sh` to delete the k3d cluster. Users must run `k3d cluster delete voting-app` manually |
 | **verify.sh doesn't check R13 ingress controller** | Tests that URLs return 200, but doesn't verify which ingress controller is handling traffic |
 | **deploy.sh doesn't verify ingress installation** | Assumes ingress controller is already running — doesn't wait for ingress pods |

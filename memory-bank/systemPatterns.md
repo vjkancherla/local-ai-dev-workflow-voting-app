@@ -1,7 +1,7 @@
 # System Patterns
 
 ## Architecture
-`vote` (Flask/gunicorn) → Redis `votes` list (RPUSH) → `worker` (BLPOP drain, idempotent upsert) → Postgres → `result` (Flask/gunicorn polls Postgres). Redis and Postgres run as Kubernetes StatefulSets/Deployments in the same k3d cluster; vote and result are fronted by an nginx Ingress.
+`vote` (Flask/gunicorn) → Redis `votes` list (RPUSH) → `worker` (BLPOP drain, idempotent upsert) → Postgres → `result` (Flask/gunicorn polls Postgres). Redis and Postgres run as Kubernetes StatefulSets/Deployments in the same k3d cluster; vote and result are fronted by k3d's bundled Traefik Ingress.
 
 ## Patterns
 - One-vote-per-browser via a signed Flask session cookie (`voter_id` UUID).
@@ -11,5 +11,5 @@
 
 ## Decisions
 - Helm → Kustomize (human override); synthesis docs still reference Helm (stale).
-- Traefik → nginx ingress + nip.io (partial — ingress YAML not fully updated).
+- Ingress resolution — `nip.io`+`/etc/hosts` → `.localhost` (no external DNS), via k3d's bundled Traefik (`ingressClassName: traefik`).
 - Decision log format: `docs/decisions/0000-template.md`.

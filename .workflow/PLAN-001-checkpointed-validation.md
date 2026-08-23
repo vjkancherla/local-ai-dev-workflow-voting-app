@@ -107,11 +107,11 @@ All 3 images build. Architecture confirmed arm64. Worker container starts and ex
 2. `kubectl cluster-info` → shows k3s running
 3. `kubectl get nodes` → 1 node Ready
 4. `kubectl get pods -n kube-system` → traefik/nginx-ingress pods Running
-5. Add `/etc/hosts`: `127.0.0.1 vote.127.0.0.1.nip.io result.127.0.0.1.nip.io`
-6. Verify hosts: `curl -sk --compressed -o /dev/null -w "%{http_code}" https://vote.127.0.0.1.nip.io:8082/` → should return 404 (no app yet)
+5. No `/etc/hosts` needed — `.localhost` resolves natively (RFC 6761).
+6. Verify hosts: `curl -sk --compressed -o /dev/null -w "%{http_code}" https://vote.localhost:8082/` → should return 404 (no app yet)
 
 ### Gate
-Cluster exists, node Ready, ingress controller pods Running, /etc/hosts configured.
+Cluster exists, node Ready, ingress controller pods Running.
 
 ---
 
@@ -174,8 +174,8 @@ All 5 pods Running. No CrashLoopBackOff. Worker logs show BLPOP loop active.
 **Goal**: Verify each service responds correctly at `/healthz`.
 
 ### Checks
-1. Vote healthz: `curl -sk --compressed -o /dev/null -w "%{http_code}" https://vote.127.0.0.1.nip.io:8082/healthz` → 200
-2. Result healthz: `curl -sk --compressed -o /dev/null -w "%{http_code}" https://result.127.0.0.1.nip.io:8082/healthz` → 200
+1. Vote healthz: `curl -sk --compressed -o /dev/null -w "%{http_code}" https://vote.localhost:8082/healthz` → 200
+2. Result healthz: `curl -sk --compressed -o /dev/null -w "%{http_code}" https://result.localhost:8082/healthz` → 200
 3. Worker healthz: `kubectl exec deploy/voting-app-worker -- python /app/app.py --healthcheck` → exit 0
 4. Redis healthz: `kubectl exec deploy/voting-app-redis -- redis-cli ping` → PONG
 5. Postgres healthz: `kubectl exec deploy/postgres-0 -- pg_isready -U postgres` → accepting connections

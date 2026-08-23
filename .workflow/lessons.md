@@ -22,7 +22,7 @@ Rule that would have avoided the rework: confirm the deployment/config tool
 (Helm vs Kustomize) with the human before generating chart templates, since the
 requirement R12 ("one Helm chart") encodes a tool choice the human may change.
 
-## 2026-08-22 — Ingress switch: Traefik → nginx + SSL passthrough + nip.io
+## 2026-08-22 — Ingress on macOS port conflicts: use k3d's bundled Traefik + `.localhost`
 
 The E2E verify script was failing because ports 80 and 8080 were already in use
 on the host (AirPlay Receiver claimed 80; another service occupied 8080). The
@@ -31,24 +31,21 @@ Traefik ingress (which listens on those ports by default) could not bind.
 Changes made:
 - Recreated the k3d cluster with explicit loadbalancer port mappings:
   `8081:80` (HTTP) and `8082:443` (HTTPS).
-- Replaced the Traefik ingress with an **nginx ingress controller** installed
-  via Helm (`ingress-nginx/ingress-nginx`).
-- Rewrote `kustomize/ingress.yaml` for nginx:
-  - `ingressClassName: nginx`
-  - `ssl-passthrough: "true"` + `ssl-redirect: "true"` for HTTPS backends.
-  - `nginx.ingress.kubernetes.io/backend-protocol: "HTTP"` (apps listen on
-    port 80, not 443 — the TLS termination happens at the ingress).
-  - `pathType: ImplementationSpecific` (required for SSL passthrough with
-    nginx; `Prefix`/`Exact` do not work).
-- Switched hostnames to **nip.io** domains:
-  `vote.127.0.0.1.nip.io` and `result.127.0.0.1.nip.io`. These auto-resolve
-  to `127.0.0.1`, eliminating the need for `/etc/hosts` entries.
-- Generated a self-signed TLS certificate (`/tmp/tls.crt` + `/tmp/tls.key`)
-  and created a Kubernetes `Secret` (`voting-app-tls`) for the ingress.
-- Updated `scripts/deploy.sh` to install nginx ingress, create the TLS secret,
-  and use HTTPS URLs on port 8082.
-- Updated `scripts/verify.sh` to use nip.io HTTPS URLs, added `-k` flag to all
-  `curl` calls (self-signed certs), and fixed a few verify-script bugs:
+- Kept **k3d's bundled Traefik** as the ingress controller
+  (`ingressClassName: traefik`); no separate nginx ingress controller is
+  installed or needed — `scripts/deploy.sh` only runs `kubectl apply -k`.
+- Rewrote `kustomize/ingress.yaml` for Traefik:
+  - `traefik.ingress.kubernetes.io/router.entrypoints: web,websecure`
+  - `pathType: ImplementationSpecific`
+  - No TLS secret / SSL passthrough — HTTPS uses Traefik's bundled self-signed
+    cert (verify.sh uses `curl -k`).
+- Switched hostnames to the reserved **`.localhost`** TLD
+  (`vote.localhost`, `result.localhost`). `.localhost` resolves to `127.0.0.1`
+  natively (RFC 6761), eliminating the need for `/etc/hosts` entries and
+  external DNS (nip.io).
+- Updated `scripts/verify.sh` to use `.localhost` HTTPS URLs on port 8082,
+  added `-k` to all `curl` calls (self-signed certs), and fixed a few
+  verify-script bugs:
   - R2: Accept HTTP 302 (Flask `redirect()` response) alongside 200.
   - R12: Use `sed`-based image override instead of `kubectl kustomize` overlay
     (the `../..` reference in the overlay causes a cycle with `kubectl kustomize`).
@@ -58,4 +55,9 @@ Changes made:
 Rule that would have avoided the initial port conflict: probe host port
 availability (80/443 or 8080/8443) before selecting ingress ports, or use a
 random high port for the loadbalancer and document it.
+
+Note: this entry was corrected after an audit found the original text described
+a switch to an nginx ingress + SSL passthrough + nip.io that never happened —
+the ingress has always used k3d's bundled Traefik, and hostnames now use
+`.localhost`.
 

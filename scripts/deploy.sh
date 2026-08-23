@@ -5,12 +5,12 @@ set -euo pipefail
 # kustomize manifests.
 #
 # Local access notes:
-#   - vote.127.0.0.1.nip.io and result.127.0.0.1.nip.io are routed by nginx
-#     ingress through the k3d loadbalancer on host ports 8081 (HTTP) and 8082 (HTTPS).
-#     Add to /etc/hosts:
-#       127.0.0.1 vote.127.0.0.1.nip.io result.127.0.0.1.nip.io
-#   - Then open https://vote.127.0.0.1.nip.io:8082/ and
-#     https://result.127.0.0.1.nip.io:8082/
+#   - vote.localhost and result.localhost are routed by the ingress through the k3d
+#     loadbalancer on host ports 8081 (HTTP) and 8082 (HTTPS). The *.localhost TLD
+#     resolves to 127.0.0.1 natively (RFC 6761) — no /etc/hosts entry and no external
+#     DNS (nip.io) required. Just open the URLs below in a browser or curl.
+#   - Then open https://vote.localhost:8082/ and
+#     https://result.localhost:8082/
 #
 # Registry mode (REGISTRY=1): create the cluster with --registry-create and
 # apply kustomize/overlays/registry, which points image refs at the
@@ -61,7 +61,6 @@ kubectl rollout status deployment voting-app-redis --timeout=300s
 kubectl rollout status statefulset voting-app-postgres --timeout=300s
 
 echo "Deploy complete."
-echo "  Add to /etc/hosts: 127.0.0.1 vote.127.0.0.1.nip.io result.127.0.0.1.nip.io"
-echo "  vote:   https://vote.127.0.0.1.nip.io:8082/"
-echo "  result: https://result.127.0.0.1.nip.io:8082/"
+echo "  vote:   https://vote.localhost:8082/   (*.localhost resolves to 127.0.0.1 natively — no /etc/hosts needed)"
+echo "  result: https://result.localhost:8082/"
 

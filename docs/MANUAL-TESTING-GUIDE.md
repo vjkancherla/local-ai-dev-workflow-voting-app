@@ -36,7 +36,7 @@ result (Flask) ◄────── SELECT / COUNT(*) / GROUP BY ────�
 - **postgres**: stores the `votes` table (1Gi PVC). StatefulSet → stable pod name `voting-app-postgres-0`.
 - **result**: queries Postgres, renders counts + percentages, auto-refreshes every 2s.
 
-All traffic reaches the app through an **Ingress** on `127.0.0.1.nip.io`, routed via the k3d loadbalancer.
+All traffic reaches the app through an **Ingress** on `vote.localhost`/`result.localhost`, routed via the k3d loadbalancer.
 
 ---
 
@@ -58,20 +58,22 @@ Verify these are installed and on your `PATH` before starting:
 
 ## 3. Environment Setup
 
-The ingress hosts are resolved through **nip.io** (a wildcard DNS service) to `127.0.0.1`. Add them to `/etc/hosts`:
+The ingress hosts use the `.localhost` TLD, which resolves to `127.0.0.1` natively (RFC 6761) on macOS and
+Linux — **no `/etc/hosts` entry and no external DNS (nip.io) are required**. Just deploy and open the URLs.
+If you're on an unusual setup where `.localhost` doesn't resolve, add:
 
 ```bash
 sudo tee -a /etc/hosts <<'EOF'
-127.0.0.1 vote.127.0.0.1.nip.io
-127.0.0.1 result.127.0.0.1.nip.io
+127.0.0.1 vote.localhost
+127.0.0.1 result.localhost
 EOF
 ```
 
 Verify resolution:
 
 ```bash
-getent hosts vote.127.0.0.1.nip.io      # should return 127.0.0.1
-getent hosts result.127.0.0.1.nip.io    # should return 127.0.0.1
+nslookup vote.localhost      # should return 127.0.0.1
+nslookup result.localhost    # should return 127.0.0.1
 ```
 
 > If a later step can't reach the app over HTTPS, this is the first thing to check.
@@ -101,9 +103,8 @@ Expected end of output:
 
 ```
 Deploy complete.
-  Add to /etc/hosts: 127.0.0.1 vote.127.0.0.1.nip.io result.127.0.0.1.nip.io
-  vote:   https://vote.127.0.0.1.nip.io:8082/
-  result: https://result.127.0.0.1.nip.io:8082/
+  vote:   https://vote.localhost:8082/   (*.localhost resolves to 127.0.0.1 natively — no /etc/hosts needed)
+  result: https://result.localhost:8082/
 ```
 
 ---
@@ -122,8 +123,8 @@ kubectl get pods
 Check the `/healthz` endpoints (self-signed certs → `-k`):
 
 ```bash
-curl -sk https://vote.127.0.0.1.nip.io:8082/healthz      # -> OK
-curl -sk https://result.127.0.0.1.nip.io:8082/healthz    # -> OK
+curl -sk https://vote.localhost:8082/healthz      # -> OK
+curl -sk https://result.localhost:8082/healthz    # -> OK
 
 # Worker has no HTTP server; its probe runs the app's --healthcheck:
 POD=kubectl get pods -l app.kubernetes.io/component=worker -o jsonpath='{.items[0].metadata.name}'
@@ -147,7 +148,7 @@ These exercise the live voting flow through the ingress. Use a **fresh browser c
 ### R1 — Vote page offers exactly two options
 
 ```bash
-curl -sk https://vote.127.0.0.1.nip.io:8082/ | grep -o 'name="choice" value="[^"]*"'
+curl -sk https://vote.localhost:8082/ | grep -o 'name="choice" value="[^"]*"'
 ```
 
 ✅ **Pass:** exactly two `value="..."` buttons (defaults: `Cats` and `Dogs`).
@@ -161,7 +162,7 @@ kubectl scale deployment/voting-app-worker --replicas=0
 # wait for worker pods to disappear
 kubectl get pods -l app.kubernetes.io/component=worker   # expect no worker pods
 before=$(kubectl exec deploy/voting-app-redis -- redis-cli LLEN votes)
-curl -sk -X POST https://vote.127.0.0.1.nip.io:8082/vote -d "choice=Cats" -c /tmp/cj-r2.txt -o /dev/null -w '%{http_code}'
+curl -sk -X POST https://vote.localhost:8082/vote -d "choice=Cats" -c /tmp/cj-r2.txt -o /dev/null -w '%{http_code}'
 after=$(kubectl exec deploy/voting-app-redis -- redis-cli LLEN votes)
 kubectl scale deployment/voting-app-worker --replicas=1
 ```
@@ -171,10 +172,10 @@ kubectl scale deployment/voting-app-worker --replicas=1
 ### R3 — One vote per browser (re-vote replaces, not adds)
 
 ```bash
-curl -sk -c /tmp/cj-r3.txt https://vote.127.0.0.1.nip.io:8082/ >/dev/null
-curl -sk -X POST https://vote.127.0.0.1.nip.io:8082/vote -d "choice=Cats" -b /tmp/cj-r3.txt -o /dev/null
+curl -sk -c /tmp/cj-r3.txt https://vote.localhost:8082/ >/dev/null
+curl -sk -X POST https://vote.localhost:8082/vote -d "choice=Cats" -b /tmp/cj-r3.txt -o /dev/null
 sleep 3
-curl -sk -X POST https://vote.127.0.0.1.nip.io:8082/vote -d "choice=Dogs" -b /tmp/cj-r3.txt -o /dev/null
+curl -sk -X POST https://vote.localhost:8082/vote -d "choice=Dogs" -b /tmp/cj-r3.txt -o /dev/null
 sleep 3
 kubectl exec voting-app-postgres-0 -- psql -U postgres -d voting -t -A -c 'SELECT COUNT(*) FROM votes'
 ```
@@ -195,7 +196,7 @@ kubectl exec voting-app-postgres-0 -- psql -U postgres -d voting -t -A -c "SELEC
 ### R5 — Result page shows counts and percentages
 
 ```bash
-curl -sk https://result.127.0.0.1.nip.io:8082/
+curl -sk https://result.localhost:8082/
 ```
 
 ✅ **Pass:** page lists both option labels (`Cats`, `Dogs`) with a numeric count and a `%` value for each.
@@ -203,7 +204,7 @@ curl -sk https://result.127.0.0.1.nip.io:8082/
 ### R6 — New vote appears in results within 5s
 
 ```bash
-curl -sk -X POST https://vote.127.0.0.1.nip.io:8082/vote -d "choice=Cats" -c /tmp/cj-r6.txt -o /dev/null
+curl -sk -X POST https://vote.localhost:8082/vote -d "choice=Cats" -c /tmp/cj-r6.txt -o /dev/null
 # Immediately poll the result page; the number next to Cats should increase within ~5 seconds.
 ```
 
@@ -228,7 +229,7 @@ kubectl exec voting-app-postgres-0 -- psql -U postgres -d voting -c '\d votes'
 ```bash
 kubectl scale deployment/voting-app-worker --replicas=0
 kubectl get pods -l app.kubernetes.io/component=worker   # wait for all worker pods gone
-curl -sk -X POST https://vote.127.0.0.1.nip.io:8082/vote -d "choice=Dogs" -c /tmp/cj-r8.txt -o /dev/null
+curl -sk -X POST https://vote.localhost:8082/vote -d "choice=Dogs" -c /tmp/cj-r8.txt -o /dev/null
 kubectl exec deploy/voting-app-redis -- redis-cli LLEN votes          # > 0 (queued)
 kubectl scale deployment/voting-app-worker --replicas=1
 kubectl rollout status deployment/voting-app-worker --timeout=120s
@@ -292,8 +293,8 @@ kubectl kustomize ./kustomize | grep -E 'vote|worker|result' | grep image
 ### R13 — Ingress HTTPS reachability
 
 ```bash
-curl -sk -o /dev/null -w '%{http_code}\n' https://vote.127.0.0.1.nip.io:8082/
-curl -sk -o /dev/null -w '%{http_code}\n' https://result.127.0.0.1.nip.io:8082/
+curl -sk -o /dev/null -w '%{http_code}\n' https://vote.localhost:8082/
+curl -sk -o /dev/null -w '%{http_code}\n' https://result.localhost:8082/
 ```
 
 ✅ **Pass:** both return `200` over HTTPS on port `8082`.
@@ -318,8 +319,8 @@ kubectl get pods
 ### R16 — Every service reports dependency health
 
 ```bash
-curl -sk https://vote.127.0.0.1.nip.io:8082/healthz     # OK
-curl -sk https://result.127.0.0.1.nip.io:8082/healthz   # OK
+curl -sk https://vote.localhost:8082/healthz     # OK
+curl -sk https://result.localhost:8082/healthz   # OK
 POD=kubectl get pods -l app.kubernetes.io/component=worker -o jsonpath='{.items[0].metadata.name}'
 kubectl exec $POD -- python /app/app.py --healthcheck && echo worker-ok
 kubectl exec deploy/voting-app-redis -- redis-cli ping                 # PONG
@@ -345,8 +346,8 @@ kubectl get secret voting-app-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' |
 
 For a holistic, non-scripted check:
 
-1. Open **https://result.127.0.0.1.nip.io:8082/** — you should see the counts page (self-signed cert warning is expected; accept/proceed).
-2. Open **https://vote.127.0.0.1.nip.io:8082/** — vote for `Cats`.
+1. Open **https://result.localhost:8082/** — you should see the counts page (self-signed cert warning is expected; accept/proceed).
+2. Open **https://vote.localhost:8082/** — vote for `Cats`.
 3. Watch the result page refresh (every ~2s); the `Cats` count and percentage should tick up.
 4. Reload the vote page in the **same browser tab** and vote for `Dogs` — the total vote count should **not** increase (one vote per browser).
 5. Open the vote page in a **private/invisible window** and vote — this is a different `voter_id`, so it counts as a separate vote.
@@ -370,12 +371,12 @@ These are documented, accepted characteristics — a "failure" here is often **e
 
 ## 11. Cleanup
 
-Delete the k3d cluster and remove the `/etc/hosts` entries when done:
+Delete the k3d cluster when done (no `/etc/hosts` entries to remove — `.localhost` resolves natively):
 
 ```bash
 k3d cluster delete voting-app
-# Remove the /etc/hosts lines you added (optional):
-sudo sed -i ''.bak '/127.0.0.1 vote.127.0.0.1.nip.io/d; /127.0.0.1 result.127.0.0.1.nip.io/d' /etc/hosts
+# No /etc/hosts entries were added (.localhost resolves natively), so there is
+# nothing to remove — only needed if you added them manually (see §3).
 ```
 
 ---

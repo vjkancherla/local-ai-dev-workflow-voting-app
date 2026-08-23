@@ -3,14 +3,13 @@
 Updated: 2026-08-23
 
 ## Working
-Initialise and populate the memory bank — done.
+none
 
 ## Remaining
-- Verify R1–R17 pass on a live cluster via `scripts/verify.sh`.
-- Revisit this file when scope or priorities change.
+- Re-run `deploy.sh` to rebuild the cluster + apply updated ingress, then `verify.sh` to confirm R1–R17.
 
 ## Known issues
 None.
 
 ## Status
-Memory bank initialised; stack and commands verified (scripts syntax-checked, all tools present). Live-cluster verification pending.
+nip.io → .localhost migration done (manifests, scripts, docs). Live-cluster R1–R17 verification pending.

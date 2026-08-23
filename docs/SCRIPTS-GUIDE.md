@@ -1,8 +1,9 @@
 # Build, Test & Scripts Guide — Voting App
 
 > Practical guide for building the images, deploying the app, and running verification on a local
-> k3d cluster. This covers the three scripts in `scripts/` (`build.sh`, `deploy.sh`, `verify.sh`) —
-> what each does, the environment variables that tune them, common workflows, and troubleshooting.
+> k3d cluster. This covers the four scripts in `scripts/` (`build.sh`, `deploy.sh`, `verify.sh`,
+> `cleanup.sh`) — what each does, the environment variables that tune them, common workflows, and
+> troubleshooting.
 >
 > 👉 For the human, requirement-by-requirement walkthrough (R1–R17), see
 > [`MANUAL-TESTING-GUIDE.md`](MANUAL-TESTING-GUIDE.md). This doc is the *operator's* companion:
@@ -19,12 +20,13 @@
 5. [`scripts/build.sh`](#scriptssh-buildsh-build-the-images)
 6. [`scripts/deploy.sh`](#scriptssh-deploysh-deploy-the-app)
 7. [`scripts/verify.sh`](#scriptssh-verifysh-verify-r1r17)
-8. [Common Workflows](#common-workflows)
-9. [Environment Variables & Configuration](#environment-variables--configuration)
-10. [Troubleshooting](#troubleshooting)
-11. [Known Limitations](#known-limitations)
-12. [Cleanup](#cleanup)
-13. [Quick Reference](#quick-reference)
+8. [`scripts/cleanup.sh`](#scriptssh-cleanuptsh-tear-down-the-deployment)
+9. [Common Workflows](#common-workflows)
+10. [Environment Variables & Configuration](#environment-variables--configuration)
+11. [Troubleshooting](#troubleshooting)
+12. [Known Limitations](#known-limitations)
+13. [Cleanup](#cleanup)
+14. [Quick Reference](#quick-reference)
 
 ---
 
@@ -44,7 +46,7 @@ result (Flask) ◄────── SELECT / COUNT(*) / GROUP BY ────�
 - **postgres**: stores the `votes` table (1Gi PVC). StatefulSet → stable pod name `voting-app-postgres-0`.
 - **result**: queries Postgres, renders counts + percentages, auto-refreshes every 2s.
 
-All traffic reaches the app through an **Ingress** on `127.0.0.1.nip.io`, routed via the k3d loadbalancer
+All traffic reaches the app through an **Ingress** on `vote.localhost`/`result.localhost`, routed via the k3d loadbalancer
 on host ports `8081` (HTTP) and `8082` (HTTPS).
 
 **Platform:** k3d (lightweight Kubernetes) on macOS arm64, deployed via Kustomize. Images are built for
@@ -76,25 +78,30 @@ Verify these are installed and on your `PATH` before starting:
 
 ## 3. Environment Setup
 
-The ingress hosts are resolved through **nip.io** (a wildcard DNS service) to `127.0.0.1`. Add them to
-`/etc/hosts` **before** deploying:
+The ingress hosts use the `.localhost` TLD, which resolves to `127.0.0.1` natively (RFC 6761) on macOS
+and Linux — **no `/etc/hosts` entry and no external DNS (nip.io) are required**. Just deploy and open the
+URLs. If you're on an unusual setup where `.localhost` doesn't resolve, add:
 
 ```bash
 sudo tee -a /etc/hosts <<'EOF'
-127.0.0.1 vote.127.0.0.1.nip.io
-127.0.0.1 result.127.0.0.1.nip.io
+127.0.0.1 vote.localhost
+127.0.0.1 result.localhost
 EOF
 ```
 
-Verify resolution (required by `verify.sh` — it assumes these entries exist):
+Verify resolution:
 
 ```bash
-getent hosts vote.127.0.0.1.nip.io      # should return 127.0.0.1
-getent hosts result.127.0.0.1.nip.io    # should return 127.0.0.1
+nslookup vote.localhost      # should return 127.0.0.1
+nslookup result.localhost    # should return 127.0.0.1
 ```
 
-> If any script can't reach the app over HTTPS, `/etc/hosts` is the first thing to check.
-> `verify.sh` does **not** verify this before running — set it up manually.
+> `.localhost` resolves via the local system resolver for curl, browsers, and `nslookup`. (macOS `getent`
+> does not expand `.localhost` — that's a `getent` quirk, not a resolution problem.)
+
+> If any script can't reach the app over HTTPS, `.localhost` resolution is the first thing to check
+> (it works out of the box on macOS/Linux; verify with `nslookup vote.localhost`).
+> `verify.sh` does **not** verify this before running — set it up manually only if your resolver is unusual.
 
 ---
 
@@ -109,6 +116,7 @@ Three scripts in `scripts/` make up the build → deploy → verify pipeline:
 | `build.sh` | `./scripts/build.sh` | Build the 3 images (`vote`, `worker`, `result`) for `linux/arm64` and load them into the cluster |
 | `deploy.sh` | `./scripts/deploy.sh` | Create the cluster (if missing), build + load images, generate secrets, apply Kustomize, wait for ready |
 | `verify.sh` | `./scripts/verify.sh` | Run all 17 requirements (R1–R17), print a PASS/FAIL summary, append results to `.workflow/verify.md` |
+| `cleanup.sh` | `./scripts/cleanup.sh` | Tear down: delete the deployed resources (always), and optionally the k3d cluster + secret file |
 
 **Typical order:** `build.sh` is called *by* `deploy.sh`, so you rarely run it directly. The normal flow is:
 
@@ -188,9 +196,8 @@ Expected end of output:
 
 ```
 Deploy complete.
-  Add to /etc/hosts: 127.0.0.1 vote.127.0.0.1.nip.io result.127.0.0.1.nip.io
-  vote:   https://vote.127.0.0.1.nip.io:8082/
-  result: https://result.127.0.0.1.nip.io:8082/
+  vote:   https://vote.localhost:8082/   (*.localhost resolves to 127.0.0.1 natively — no /etc/hosts needed)
+  result: https://result.localhost:8082/
 ```
 
 **Registry mode** (fallback if port 5000 is busy):
@@ -212,7 +219,7 @@ Postgres credentials and the Flask `SECRET_KEY` stay stable across re-deploys.
 Full automated verification of all 17 requirements. Prints a per-requirement PASS/FAIL table and a summary
 line (`===== N PASS, M FAIL =====`), and appends the same output to `.workflow/verify.md`.
 
-**Prerequisites:** a running cluster (from `deploy.sh`) **and** the `/etc/hosts` entries from §3.
+**Prerequisites:** a running cluster (from `deploy.sh`). The `vote.localhost`/`result.localhost` hosts resolve natively (RFC 6761) — no `/etc/hosts` setup required.
 
 **Run it:**
 
@@ -255,14 +262,47 @@ line (`===== N PASS, M FAIL =====`), and appends the same output to `.workflow/v
 
 ---
 
+<a name="scriptssh-cleanuptsh-tear-down-the-deployment">
+
+## 8. `scripts/cleanup.sh` — Tear Down the Deployment
+
+Removes the resources created by `deploy.sh`. By default it deletes only the Kubernetes manifests; the k3d
+cluster and the generated secret file are removed only when explicitly requested, so a plain run is safe to
+repeat.
+
+**Steps (in order):**
+
+1. **Delete Kubernetes resources:** `kubectl delete -k kustomize/` (or `kustomize/overlays/registry/` in
+   registry mode), with `--ignore-not-found` so already-removed resources don't abort the run.
+2. **Report remaining workloads** (if any were still terminating).
+3. **Optionally remove `kustomize/postgres-secret.env`** (`REMOVE_SECRETS=1`).
+4. **Optionally delete the k3d cluster** (`DELETE_CLUSTER=1`), which also removes the cluster-internal
+   registry if one was created.
+
+**Run it:**
+
+```bash
+./scripts/cleanup.sh                                   # delete k8s resources only
+DELETE_CLUSTER=1 ./scripts/cleanup.sh                  # also delete the k3d cluster
+REMOVE_SECRETS=1 ./scripts/cleanup.sh                  # also delete postgres-secret.env
+DELETE_CLUSTER=1 REMOVE_SECRETS=1 ./scripts/cleanup.sh # full teardown
+REGISTRY=1 ./scripts/cleanup.sh                        # target the registry overlay
+```
+
+> **Order matters:** resources are always deleted before the cluster, and `postgres-secret.env` is
+> persisted across deploys (so credentials stay stable). Use `REMOVE_SECRETS=1` only when you want a
+> truly fresh start.
+
+---
+
 <a name="common-workflows">
 
-## 8. Common Workflows
+## 9. Common Workflows
 
 **Fresh start (everything):**
 
 ```bash
-# §3: add /etc/hosts entries first
+# .localhost resolves natively (RFC 6761) — no /etc/hosts setup needed
 ./scripts/deploy.sh
 ./scripts/verify.sh
 ```
@@ -300,15 +340,22 @@ CLUSTER=mycluster ./scripts/deploy.sh
 ```
 
 > `verify.sh` supports a custom `CLUSTER` via `RELEASE` for label selectors and the auto-detected
-> Postgres pod name — **except** R9's readiness loop hardcodes `voting-app-postgres-0` (see §11). For a
+> Postgres pod name — **except** R9's readiness loop hardcodes `voting-app-postgres-0` (see §12). For a
 > full `verify.sh` run, keep the default cluster name `voting-app`, or override `PGPOD` and expect R9's
 > readiness wait to reference the default name.
+
+**Clean up / teardown:**
+
+```bash
+./scripts/cleanup.sh                       # delete k8s resources only
+DELETE_CLUSTER=1 ./scripts/cleanup.sh      # also delete the k3d cluster (§13)
+```
 
 ---
 
 <a name="environment-variables--configuration">
 
-## 9. Environment Variables & Configuration
+## 10. Environment Variables & Configuration
 
 All variables are optional; defaults are shown.
 
@@ -319,10 +366,12 @@ All variables are optional; defaults are shown.
 | `REGISTRY_PORT` | build.sh, deploy.sh | `5000` | Host port for the k3d registry (change if AirPlay claims 5000) |
 | `KUSTOMIZE_DIR` | deploy.sh, verify.sh | `./kustomize` | Base Kustomize directory to apply |
 | `RELEASE` | verify.sh | `voting-app` | Release name used in label selectors and pod-name lookups |
-| `VOTE_URL` | verify.sh | `https://vote.127.0.0.1.nip.io:8082` | Override the vote base URL |
-| `RESULT_URL` | verify.sh | `https://result.127.0.0.1.nip.io:8082` | Override the result base URL |
+| `VOTE_URL` | verify.sh | `https://vote.localhost:8082` | Override the vote base URL |
+| `RESULT_URL` | verify.sh | `https://result.localhost:8082` | Override the result base URL |
 | `PGPOD` | verify.sh | auto-detected | Force a specific Postgres pod name (usually left unset) |
 | `OUT` | verify.sh | `.workflow/verify.md` | Where the PASS/FAIL report is written (truncated at start, filled per-check) |
+| `DELETE_CLUSTER` | cleanup.sh | `0` | `1` = also `k3d cluster delete` after removing resources |
+| `REMOVE_SECRETS` | cleanup.sh | `0` | `1` = also delete `kustomize/postgres-secret.env` for a fresh start |
 
 **Registry overlay:** `kustomize/overlays/registry/kustomization.yaml` redirects the `vote`, `worker`,
 `result` image refs to `k3d-voting-app-registry.localhost:5000/...`. Edit the port in this file if you use a
@@ -332,31 +381,30 @@ non-default `REGISTRY_PORT`.
 
 <a name="troubleshooting">
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Cause / Fix |
 |---------|-------------|
-| `verify.sh`/`deploy.sh` can't reach the app over HTTPS | `/etc/hosts` not set up (§3). Verify with `getent hosts vote.127.0.0.1.nip.io`. |
+| `verify.sh`/`deploy.sh` can't reach the app over HTTPS | `.localhost` isn't resolving on this machine (§3). Check with `nslookup vote.localhost`; on most setups it works out of the box. |
 | `deploy.sh` hangs at rollout status | A pod is crash-looping: `kubectl get pods`, `kubectl describe pod <pod>`, `kubectl logs <pod>`. |
 | `ImagePullBackOff` in import mode | Images weren't imported — re-run `./scripts/build.sh`. In registry mode, confirm `REGISTRY=1` was used consistently. |
 | Port 5000 already in use | AirPlay Receiver on macOS. Use `REGISTRY=1 REGISTRY_PORT=5001` (and update the overlay port). |
 | `verify.sh` R15 fails on Rancher Desktop | It falls back to `rdctl shell docker ...` automatically; ensure Docker is reachable via `rdctl`. |
 | R9 flaky (tally changes) | Postgres readiness has a 30s delay and the result pod needs to reconnect. The script waits; manual runs should too. |
 | R8 "no vote queued during worker outage" | The worker wasn't fully scaled to 0 before the POST. The script waits up to 30s for worker pods to disappear. |
-| Re-running verify shows stale data | `verify.sh` never resets the `votes` table, so tallies accumulate across runs. Wipe to start clean: `kubectl delete pod voting-app-postgres-0` (PVC keeps data) or delete+recreate the cluster (§12). The **report** file itself is fresh each run.
+| Re-running verify shows stale data | `verify.sh` never resets the `votes` table, so tallies accumulate across runs. Wipe to start clean: `kubectl delete pod voting-app-postgres-0` (PVC keeps data) or delete+recreate the cluster (§13). The **report** file itself is fresh each run.
 
 ---
 
 <a name="known-limitations">
 
-## 11. Known Limitations
+## 12. Known Limitations
 
 Script-related caveats to be aware of (see `README.md` §6 for the full gaps list):
 
 | Limitation | Impact |
 |------------|--------|
-| **No cleanup script** | No `scripts/cleanup.sh` — delete the cluster manually: `k3d cluster delete voting-app` (§12). |
-| **verify.sh doesn't check /etc/hosts** | Assumes the nip.io entries exist; won't fail if they're missing. Set them up manually (§3). |
+| **verify.sh doesn't check `.localhost`** | Assumes `.localhost` resolves (it does natively on macOS/Linux); won't fail if your resolver is misconfigured. Verify with `nslookup vote.localhost` (§3). |
 | **deploy.sh doesn't wait for the ingress** | Assumes the ingress controller is already running; doesn't verify ingress pods are ready. |
 | **verify.sh not `-e`** | Uses `set -uo pipefail` (no exit-on-error) so all checks run — good, but a failing check doesn't set a non-zero exit code. |
 | **POSTGRES_DB mismatch** | Deployments set `PGDATABASE=voting`; the generated `postgres-secret.env` omits `POSTGRES_DB`. Apps use `voting`; `verify.sh` queries `-d voting`. The `votingdb` DB (from the placeholder file) may be empty. Not caught by R1–R17. |
@@ -366,14 +414,16 @@ Script-related caveats to be aware of (see `README.md` §6 for the full gaps lis
 
 <a name="cleanup">
 
-## 12. Cleanup
+## 13. Cleanup
 
-Delete the k3d cluster and (optionally) remove the `/etc/hosts` entries when done:
+The primary teardown path is [`scripts/cleanup.sh`](#scriptssh-cleanuptsh-tear-down-the-deployment), which
+deletes the Kubernetes resources and (optionally) the k3d cluster and secret file (§8). For a fully manual
+teardown — use `k3d` directly (no `/etc/hosts` entries to remove, since `.localhost` resolves natively):
 
 ```bash
 k3d cluster delete voting-app
-# Remove the /etc/hosts lines you added (optional):
-sudo sed -i ''.bak '/127.0.0.1 vote.127.0.0.1.nip.io/d; /127.0.0.1 result.127.0.0.1.nip.io/d' /etc/hosts
+# No /etc/hosts entries were added (.localhost resolves natively), so there is
+# nothing to remove — only needed if you added them manually (see §3).
 ```
 
 > The `k3d cluster delete` command also removes the cluster-internal registry (if created in registry mode).
@@ -389,6 +439,7 @@ sudo sed -i ''.bak '/127.0.0.1 vote.127.0.0.1.nip.io/d; /127.0.0.1 result.127.0.
 | Build images | `./scripts/build.sh` |
 | Deploy (cluster + images + manifests) | `./scripts/deploy.sh` |
 | Full automated verification (R1–R17) | `./scripts/verify.sh` → `.workflow/verify.md` |
+| Tear down the deployment | `./scripts/cleanup.sh` (add `DELETE_CLUSTER=1` to also delete the k3d cluster) |
 | Registry mode | `REGISTRY=1 ./scripts/deploy.sh` |
 | Cluster status | `kubectl get pods,svc,ingress` |
 | Re-run a single check | Copy the snippet from `docs/MANUAL-TESTING-GUIDE.md` |

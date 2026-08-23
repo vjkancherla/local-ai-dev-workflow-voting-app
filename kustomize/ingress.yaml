@@ -10,7 +10,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: vote.127.0.0.1.nip.io
+    - host: vote.localhost
       http:
         paths:
           - path: /
@@ -20,7 +20,7 @@ spec:
                 name: voting-app-vote
                 port:
                   number: 80
-    - host: result.127.0.0.1.nip.io
+    - host: result.localhost
       http:
         paths:
           - path: /
