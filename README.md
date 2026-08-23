@@ -7,6 +7,8 @@
 
 > 👉 **Want to build/deploy/verify?** See [`docs/SCRIPTS-GUIDE.md`](docs/SCRIPTS-GUIDE.md) for how the `build.sh`, `deploy.sh`, and `verify.sh` scripts work, their environment variables, common workflows, and troubleshooting.
 
+> 👉 **Want to automate the pipeline?** See [`docs/MAKEFILE-GUIDE.md`](docs/MAKEFILE-GUIDE.md) for the `make` targets (build/deploy/verify/teardown), environment-variable passthrough, common workflows, and troubleshooting.
+
 ---
 
 ## Table of Contents
