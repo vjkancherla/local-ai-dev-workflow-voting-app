@@ -6,10 +6,11 @@ Updated: 2026-08-23
 none
 
 ## Remaining
-- Re-run `deploy.sh` to rebuild the cluster + apply updated ingress, then `verify.sh` to confirm R1–R17.
+- Optional: commit the Makefile.
+- Live-cluster R1–R17 verification still pending (needs `deploy.sh` + `verify.sh`).
 
 ## Known issues
 None.
 
 ## Status
-nip.io → .localhost migration done (manifests, scripts, docs). Live-cluster R1–R17 verification pending.
+nip.io → .localhost migration done. Makefile added to wrap build/deploy/verify/cleanup scripts.

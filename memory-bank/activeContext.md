@@ -3,22 +3,20 @@
 Updated: 2026-08-23
 
 ## Current focus
-Removed the dead `nip.io` dependency: app hostnames now use the `.localhost` TLD, which resolves to
-127.0.0.1 natively (RFC 6761) — no `/etc/hosts` entry, no external DNS.
+Added a `Makefile` that wraps the four pipeline scripts (`build.sh`, `deploy.sh`, `verify.sh`,
+`cleanup.sh`) from `docs/SCRIPTS-GUIDE.md` with convenience targets and env-var passthrough.
 
 ## Recent changes
-Rolled out `.localhost` resolution across the repo. `kustomize/ingress.yaml` host rules and `verify.sh`
-URLs now use `vote.localhost`/`result.localhost` (was `vote.127.0.0.1.nip.io`). Rewrote all `/etc/hosts`
-setup instructions in `scripts/deploy.sh`, `scripts/verify.sh`, `README.md`, `docs/SCRIPTS-GUIDE.md`,
-`docs/MANUAL-TESTING-GUIDE.md` to explain native resolution; `getent` checks → `nslookup`. Removed stale
-`scripts/verify.sh.bak`.
+Created `Makefile`: targets `build`, `deploy`/`up`, `verify`/`test`, `all` (deploy+verify),
+`clean`/`down`, `destroy` (full teardown), `status`, `help`. `.EXPORT_ALL_VARIABLES` forwards
+`CLUSTER`, `REGISTRY`, `REGISTRY_PORT`, `DELETE_CLUSTER`, `REMOVE_SECRETS` to the scripts.
+Verified with `make help` and `make -n`.
 
 ## Next step
-Re-run `./scripts/deploy.sh` to apply the updated ingress, then `./scripts/verify.sh` to confirm R1–R17.
+Optional: commit the Makefile, then re-run `./scripts/deploy.sh` + `verify.sh` for live R1–R17.
 
 ## Active decisions
-Adopted `.localhost` (RFC 6761) instead of `nip.io` + `/etc/hosts`: native resolution, no external DNS,
-no per-name hosts entries. Ingress routes on the Host header, so only the client needs resolution.
+Wrapped scripts rather than reimplementing logic — single source of truth stays in `scripts/`.
 
 ## Blocked
 none

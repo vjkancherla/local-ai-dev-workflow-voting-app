@@ -15,6 +15,7 @@
 2. [Application Services](#application-services)
 3. [Kubernetes Infrastructure (Kustomize)](#kubernetes-infrastructure-kustomize)
 4. [Build, Deploy & Verify Scripts](#build-deploy-verify-scripts)
+   - [Makefile Automation](#makefile-automation)
 5. [Workflow Documentation](#workflow-documentation)
 6. [Summary of Known Gaps](#summary-of-known-gaps)
 
@@ -234,6 +235,30 @@ Full R1–R17 verification script. Outputs to `.workflow/verify.md`.
 - Uses `sed`-based image override for R12 (avoids `kubectl kustomize` cycle)
 - `_connect_with_retry()` in result/app.py handles rapid polling under verify script
 - Results appended to `.workflow/verify.md`
+
+### 4.4 `Makefile` — Automation Wrapper
+
+The root `Makefile` wraps the four scripts above with short targets and forwards their environment
+variables, so the whole pipeline runs without memorizing script paths or flags. Full details in
+[`docs/MAKEFILE-GUIDE.md`](docs/MAKEFILE-GUIDE.md).
+
+| Target | Runs | Description |
+|--------|------|-------------|
+| `make help` | — | List all targets |
+| `make build` | `scripts/build.sh` | Build + load the 3 images |
+| `make deploy` (alias `up`) | `scripts/deploy.sh` | Create cluster, build, apply Kustomize, wait ready |
+| `make verify` (alias `test`) | `scripts/verify.sh` | Run R1–R17 → `.workflow/verify.md` |
+| `make all` | deploy → verify | The normal build → verify loop |
+| `make clean` (alias `down`) | `scripts/cleanup.sh` | Delete deployed resources |
+| `make destroy` | `scripts/cleanup.sh` (full) | Delete resources + k3d cluster + secret file |
+| `make status` | `kubectl get pods,svc,ingress` | Cluster status |
+
+**Env-var passthrough:** `CLUSTER`, `REGISTRY`, `REGISTRY_PORT`, `DELETE_CLUSTER`, `REMOVE_SECRETS`
+are forwarded to the underlying scripts. Pass them either way —
+`REGISTRY=1 make deploy` or `make deploy REGISTRY=1`.
+
+**Typical loop:** `make all` (deploy + verify). Use `make build` to reload images after app-code
+changes, `make destroy` for a full teardown.
 
 
 <a name="workflow-documentation"></a>
