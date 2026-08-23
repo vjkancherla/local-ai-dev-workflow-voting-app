@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voting-app-worker
+  labels:
+    app.kubernetes.io/name: voting-app
+    app.kubernetes.io/instance: voting-app
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-app
+      app.kubernetes.io/instance: voting-app
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-app
+        app.kubernetes.io/instance: voting-app
+        app.kubernetes.io/component: worker
+    spec:
+      initContainers:
+        # Single source of truth for the schema: wait for Postgres, then
+        # create the table idempotently.
+        - name: init-db
+          image: postgres:16-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until pg_isready -h voting-app-postgres -U postgres; do
+                echo "waiting for postgres";
+                sleep 2;
+              done;
+              psql -h voting-app-postgres -U postgres -d voting -c "CREATE TABLE IF NOT EXISTS votes (voter_id VARCHAR(255) PRIMARY KEY, choice VARCHAR(255) NOT NULL, updated_at TIMESTAMP NOT NULL DEFAULT NOW());"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voting-app-postgres
+                  key: POSTGRES_PASSWORD
+      containers:
+        - name: worker
+          image: worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REDIS_URL
+              value: "redis://voting-app-redis:6379/0"
+            - name: PGHOST
+              value: "voting-app-postgres"
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: "voting"
+            - name: PGUSER
+              value: "postgres"
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voting-app-postgres
+                  key: POSTGRES_PASSWORD
+          livenessProbe:
+            exec:
+              command: ["python", "/app/app.py", "--healthcheck"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["python", "/app/app.py", "--healthcheck"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

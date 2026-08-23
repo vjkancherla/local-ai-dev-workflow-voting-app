@@ -1,0 +1,26 @@
+# oh-my-agent runtime (local artifacts — do not commit)
+.antigravitycli/
+.agents/results/
+.agents/state/
+.agents/backup/
+docs/plans/
+.migration-backup/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# Docker
+*.log
+
+# Helm (downloaded/derived artifacts)
+helm/voting-app/charts/
+helm/voting-app/Chart.lock
+
+# Kustomize (generated secret env — never commit credentials)
+kustomize/postgres-secret.env

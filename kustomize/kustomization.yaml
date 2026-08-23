@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - vote-deployment.yaml
+  - vote-service.yaml
+  - worker-deployment.yaml
+  - result-deployment.yaml
+  - result-service.yaml
+  - redis-deployment.yaml
+  - redis-service.yaml
+  - postgres-statefulset.yaml
+  - postgres-service.yaml
+  - ingress.yaml
+
+# Postgres credentials + Flask SECRET_KEY are generated from a gitignored
+# env file (created once by scripts/deploy.sh). No literal secrets are
+# committed; the Secret name is kept stable (no hash suffix) so it persists
+# across re-applies.
+secretGenerator:
+  - name: voting-app-postgres
+    envs:
+      - postgres-secret.env
+
+generatorOptions:
+  disableNameSuffixHash: true

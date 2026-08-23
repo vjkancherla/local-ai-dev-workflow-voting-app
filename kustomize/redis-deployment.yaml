@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voting-app-redis
+  labels:
+    app.kubernetes.io/name: voting-app
+    app.kubernetes.io/instance: voting-app
+    app.kubernetes.io/component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-app
+      app.kubernetes.io/instance: voting-app
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-app
+        app.kubernetes.io/instance: voting-app
+        app.kubernetes.io/component: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            - redis-server
+            - --maxmemory
+            - 128mb
+            - --maxmemory-policy
+            - noeviction
+          ports:
+            - containerPort: 6379
+              name: redis
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

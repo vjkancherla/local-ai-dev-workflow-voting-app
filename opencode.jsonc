@@ -1,0 +1,70 @@
+// {
+//   "$schema": "https://opencode.ai/config.json",
+//   "provider": {
+//     "deepseek": {
+//       "npm": "@ai-sdk/openai-compatible",
+//       "name": "DeepSeek",
+//       "options": {
+//         "baseURL": "https://api.deepseek.com/v1",
+//         // Use an environment variable for the API key, or insert it directly (not recommended)
+//         "apiKey": "sk-515c0668525346e09e3551bb4f00dcf5"
+//       },
+//       "models": {
+//         "deepseek-v4-pro": {
+//           "name": "DeepSeek V4 Pro",
+//           "tool_call": true,
+//           // Adjust limits according to the model (DeepSeek V3/R1 offers 128k context)
+//           "limit": { "context": 128000, "output": 4096 }
+//         }
+//       }
+//     }
+//   },
+//   "model": "deepseek/deepseek-v4-pro",
+//   "small_model": "deepseek/deepseek-v4-pro"
+// }
+
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "llama-cpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ornith-1.5-35B-A3B (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1"
+      },
+      "models": {
+        "Ornith-1.5-35B-A3B-GGUF": {
+          "name": "Ornith-1.5-35B-A3B 35b (local)",
+          "limit": {
+            "context": 128000,
+            "output": 65536
+          }
+        }
+      }
+    }
+  },
+  "model": "llama-cpp/Ornith-1.5-35B-A3B-GGUF",
+  "small_model": "llama-cpp/Ornith-1.5-35B-A3B-GGUF"
+}
+// {
+//   "$schema": "https://opencode.ai/config.json",
+//   "provider": {
+//     "gemma-local": {
+//       "npm": "@ai-sdk/openai-compatible",
+//       "name": "Gemma Uncensored Local",
+//       "options": {
+//         "baseURL": "http://127.0.0.1:8090/v1",
+//         "apiKey": "local"
+//       },
+//       "models": {
+//         "gemma-uncensored": {
+//           "name": "Gemma-4 26B (local)",
+//           "tool_call": true,
+//           "limit": { "context": 65536, "output": 8192 }
+//         }
+//       }
+//     }
+//   },
+//   "model": "gemma-local/gemma-uncensored",
+//   "small_model": "gemma-local/gemma-uncensored"
+// }

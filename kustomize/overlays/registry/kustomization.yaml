@@ -1,0 +1,22 @@
+# Registry fallback overlay: point application image refs at the k3d-managed
+# registry so the cluster pulls instead of using `k3d image import`.
+#
+# Apply with: kubectl apply -k kustomize/overlays/registry
+#
+# NOTE: the registry listens on port 5000 by default. If macOS AirPlay Receiver
+# claims port 5000, recreate the cluster with REGISTRY_PORT=5001 and change the
+# port below to 5001.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../..
+
+images:
+  - name: vote
+    newName: k3d-voting-app-registry.localhost:5000/vote
+  - name: worker
+    newName: k3d-voting-app-registry.localhost:5000/worker
+  - name: result
+    newName: k3d-voting-app-registry.localhost:5000/result

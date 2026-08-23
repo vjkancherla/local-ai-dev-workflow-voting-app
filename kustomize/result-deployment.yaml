@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voting-app-result
+  labels:
+    app.kubernetes.io/name: voting-app
+    app.kubernetes.io/instance: voting-app
+    app.kubernetes.io/component: result
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: voting-app
+      app.kubernetes.io/instance: voting-app
+      app.kubernetes.io/component: result
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: voting-app
+        app.kubernetes.io/instance: voting-app
+        app.kubernetes.io/component: result
+    spec:
+      initContainers:
+        # Wait for Postgres to be reachable before serving results.
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until pg_isready -h voting-app-postgres -U postgres; do
+                echo "waiting for postgres";
+                sleep 2;
+              done;
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voting-app-postgres
+                  key: POSTGRES_PASSWORD
+      containers:
+        - name: result
+          image: result:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGHOST
+              value: "voting-app-postgres"
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: "voting"
+            - name: PGUSER
+              value: "postgres"
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voting-app-postgres
+                  key: POSTGRES_PASSWORD
+            - name: OPTIONS
+              value: '["Cats","Dogs"]'
+          ports:
+            - containerPort: 80
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

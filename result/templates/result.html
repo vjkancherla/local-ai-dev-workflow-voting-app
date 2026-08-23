@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="refresh" content="2">
+    <title>Results</title>
+  </head>
+  <body>
+    <h1>Results</h1>
+    <table border="1">
+      <tr><th>Option</th><th>Count</th><th>Percentage</th></tr>
+      {% for r in results %}
+        <tr><td>{{ r.option }}</td><td>{{ r.count }}</td><td>{{ r.percent }}%</td></tr>
+      {% endfor %}
+    </table>
+    <p>Total votes: {{ total }}</p>
+  </body>
+</html>

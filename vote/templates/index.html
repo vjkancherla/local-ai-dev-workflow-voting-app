@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Vote</title>
+  </head>
+  <body>
+    <h1>Vote</h1>
+    <form method="post" action="/vote">
+      {% for option in options %}
+        <button type="submit" name="choice" value="{{ option }}">{{ option }}</button>
+      {% endfor %}
+    </form>
+  </body>
+</html>
